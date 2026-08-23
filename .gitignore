@@ -1,9 +1,15 @@
 # Local .terraform directories
 .terraform/
 
+# Backend configuration is generated locally from bootstrap outputs
+backend.hcl
+
 # .tfstate files
 *.tfstate
 *.tfstate.*
+
+# Saved execution plans may contain sensitive values
+*.tfplan
 
 # Crash log files
 crash.log
