@@ -19,7 +19,7 @@ env:
   ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-  TF_VAR_budget_contact_emails: ${{ secrets.BUDGET_CONTACT_EMAILS }}
+  TF_VAR_budget_contact_emails: ${{ vars.BUDGET_CONTACT_EMAILS }}
 
 jobs:
   plan:
@@ -37,8 +37,6 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          TF_VAR_location: ${{ vars.AZURE_LOCATION }}
-          TF_VAR_budget_contact_emails: ${{ vars.BUDGET_CONTACT_EMAILS }}
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
