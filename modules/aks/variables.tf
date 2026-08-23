@@ -22,6 +22,11 @@ variable "control_plane_identity_id" {
   type = string
 }
 
+variable "tenant_id" {
+  description = "Microsoft Entra tenant used for AKS authentication and Azure RBAC."
+  type        = string
+}
+
 variable "node_vm_size" {
   type    = string
   default = "Standard_B2s"

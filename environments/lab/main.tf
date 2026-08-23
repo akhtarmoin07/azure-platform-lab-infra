@@ -86,6 +86,7 @@ module "aks" {
   dns_prefix                 = "aks-${var.project_name}-lab"
   subnet_id                  = module.networking.aks_subnet_id
   control_plane_identity_id  = azurerm_user_assigned_identity.aks_control_plane.id
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
   node_vm_size               = var.node_vm_size
   node_count                 = var.node_count
   node_os_disk_size_gb       = var.node_os_disk_size_gb
