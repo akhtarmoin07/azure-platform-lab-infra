@@ -8,7 +8,8 @@ resource "azurerm_storage_account" "this" {
   is_hns_enabled                  = true
   min_tls_version                 = "TLS1_2"
   allow_nested_items_to_be_public = false
-  shared_access_key_enabled       = false
+  shared_access_key_enabled       = true
+  default_to_oauth_authentication = true
   public_network_access_enabled   = true
   tags                            = var.tags
 
