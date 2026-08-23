@@ -3,6 +3,11 @@ variable "subscription_id" {
   type        = string
 }
 
+variable "platform_admin_group_object_id" {
+  description = "Microsoft Entra object ID of the platform administrators security group."
+  type        = string
+}
+
 variable "location" {
   type    = string
   default = "swedencentral"

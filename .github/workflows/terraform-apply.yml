@@ -23,6 +23,7 @@ env:
   ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_platform_admin_group_object_id: ${{ vars.PLATFORM_ADMIN_GROUP_OBJECT_ID }}
   TF_VAR_location: ${{ vars.AZURE_LOCATION }}
   TF_VAR_budget_contact_emails: ${{ vars.BUDGET_CONTACT_EMAILS }}
 

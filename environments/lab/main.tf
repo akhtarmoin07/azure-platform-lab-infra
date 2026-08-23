@@ -111,22 +111,22 @@ resource "azurerm_role_assignment" "aks_acr_pull" {
   skip_service_principal_aad_check = true
 }
 
-resource "azurerm_role_assignment" "current_user_aks_admin" {
+resource "azurerm_role_assignment" "platform_admin_aks_admin" {
   scope                = module.aks.id
   role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.platform_admin_group_object_id
 }
 
-resource "azurerm_role_assignment" "current_user_aks_cluster_user" {
+resource "azurerm_role_assignment" "platform_admin_aks_cluster_user" {
   scope                = module.aks.id
   role_definition_name = "Azure Kubernetes Service Cluster User Role"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.platform_admin_group_object_id
 }
 
-resource "azurerm_role_assignment" "current_user_key_vault_admin" {
+resource "azurerm_role_assignment" "platform_admin_key_vault_admin" {
   scope                = module.key_vault.id
   role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.platform_admin_group_object_id
 }
 
 resource "azurerm_role_assignment" "aks_key_vault_secrets_user" {
@@ -136,10 +136,10 @@ resource "azurerm_role_assignment" "aks_key_vault_secrets_user" {
   skip_service_principal_aad_check = true
 }
 
-resource "azurerm_role_assignment" "current_user_adls_data_owner" {
+resource "azurerm_role_assignment" "platform_admin_adls_data_owner" {
   scope                = module.adls.id
   role_definition_name = "Storage Blob Data Owner"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.platform_admin_group_object_id
 }
 
 resource "azurerm_consumption_budget_subscription" "lab" {
