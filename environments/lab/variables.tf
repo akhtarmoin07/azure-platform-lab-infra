@@ -50,35 +50,10 @@ variable "node_vm_size" {
 
 variable "node_count" {
   type    = number
-  default = 3
+  default = 1
 }
 
 variable "node_os_disk_size_gb" {
-  type    = number
-  default = 30
-}
-
-variable "user_node_vm_size" {
-  type    = string
-  default = "Standard_B2s_v2"
-}
-
-variable "user_node_count" {
-  type    = number
-  default = 2
-}
-
-variable "user_node_min_count" {
-  type    = number
-  default = 2
-}
-
-variable "user_node_max_count" {
-  type    = number
-  default = 3
-}
-
-variable "user_node_os_disk_size_gb" {
   type    = number
   default = 30
 }

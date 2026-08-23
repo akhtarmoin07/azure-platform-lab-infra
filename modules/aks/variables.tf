@@ -36,62 +36,17 @@ variable "node_vm_size" {
 variable "node_count" {
   description = "Number of nodes in the AKS system node pool."
   type        = number
-  default     = 3
+  default     = 1
 
   validation {
-    condition     = var.node_count >= 2
-    error_message = "The system node pool must contain at least two nodes."
+    condition     = var.node_count >= 1
+    error_message = "The system node pool must contain at least one node."
   }
 }
 
 variable "node_os_disk_size_gb" {
   type    = number
   default = 30
-}
-
-variable "user_node_vm_size" {
-  description = "VM size for the autoscaling AKS user node pool."
-  type        = string
-  default     = "Standard_B2s_v2"
-}
-
-variable "user_node_count" {
-  description = "Initial number of nodes in the AKS user node pool."
-  type        = number
-  default     = 2
-
-  validation {
-    condition     = var.user_node_count >= 2
-    error_message = "The initial user node count must be at least two."
-  }
-}
-
-variable "user_node_min_count" {
-  description = "Minimum number of nodes in the AKS user node pool."
-  type        = number
-  default     = 2
-
-  validation {
-    condition     = var.user_node_min_count >= 2
-    error_message = "The user node pool minimum must be at least two."
-  }
-}
-
-variable "user_node_max_count" {
-  description = "Maximum number of nodes in the AKS user node pool."
-  type        = number
-  default     = 3
-
-  validation {
-    condition     = var.user_node_max_count >= 2
-    error_message = "The user node pool maximum must be at least two."
-  }
-}
-
-variable "user_node_os_disk_size_gb" {
-  description = "OS disk size for each AKS user node, in GB."
-  type        = number
-  default     = 30
 }
 
 variable "kubernetes_version" {

@@ -21,8 +21,7 @@ resource "azurerm_kubernetes_cluster" "this" {
     vnet_subnet_id               = var.subnet_id
     type                         = "VirtualMachineScaleSets"
     os_disk_size_gb              = var.node_os_disk_size_gb
-    only_critical_addons_enabled = true
-    temporary_name_for_rotation  = "systemtmp"
+    only_critical_addons_enabled = false
 
     upgrade_settings {
       max_surge = "10%"
@@ -72,28 +71,4 @@ resource "azurerm_kubernetes_cluster" "this" {
       error_message = "A Log Analytics workspace ID is required when Container Insights is enabled."
     }
   }
-}
-
-resource "azurerm_kubernetes_cluster_node_pool" "user" {
-  name                  = "user"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  mode                  = "User"
-  vm_size               = var.user_node_vm_size
-  vnet_subnet_id        = var.subnet_id
-  os_disk_size_gb       = var.user_node_os_disk_size_gb
-
-  auto_scaling_enabled = true
-  node_count           = var.user_node_count
-  min_count            = var.user_node_min_count
-  max_count            = var.user_node_max_count
-
-  node_labels = {
-    workload = "applications"
-  }
-
-  upgrade_settings {
-    max_surge = "33%"
-  }
-
-  tags = var.tags
 }

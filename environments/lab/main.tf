@@ -90,11 +90,6 @@ module "aks" {
   node_vm_size               = var.node_vm_size
   node_count                 = var.node_count
   node_os_disk_size_gb       = var.node_os_disk_size_gb
-  user_node_vm_size          = var.user_node_vm_size
-  user_node_count            = var.user_node_count
-  user_node_min_count        = var.user_node_min_count
-  user_node_max_count        = var.user_node_max_count
-  user_node_os_disk_size_gb  = var.user_node_os_disk_size_gb
   kubernetes_version         = var.kubernetes_version
   service_cidr               = var.aks_service_cidr
   dns_service_ip             = var.aks_dns_service_ip
