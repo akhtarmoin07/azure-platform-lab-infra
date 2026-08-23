@@ -1,6 +1,6 @@
 variable "subscription_id" {
   description = "Azure subscription used by the lab."
-  sensitive   = true
+  type        = string
 }
 
 variable "location" {
