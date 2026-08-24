@@ -15,12 +15,13 @@ resource "azurerm_resource_group" "platform" {
 module "networking" {
   source = "../../modules/networking"
 
-  name                = "vnet-${var.project_name}-lab"
-  resource_group_name = azurerm_resource_group.platform.name
-  location            = azurerm_resource_group.platform.location
-  address_space       = var.vnet_address_space
-  aks_subnet_prefixes = var.aks_subnet_prefixes
-  tags                = var.tags
+  name                             = "vnet-${var.project_name}-lab"
+  resource_group_name              = azurerm_resource_group.platform.name
+  location                         = azurerm_resource_group.platform.location
+  address_space                    = var.vnet_address_space
+  aks_subnet_prefixes              = var.aks_subnet_prefixes
+  private_endpoint_subnet_prefixes = var.private_endpoint_subnet_prefixes
+  tags                             = var.tags
 }
 
 module "acr" {
@@ -46,11 +47,13 @@ module "adls" {
 module "key_vault" {
   source = "../../modules/key-vault"
 
-  name                = "kv-${var.project_name}-${local.suffix}"
-  resource_group_name = azurerm_resource_group.platform.name
-  location            = azurerm_resource_group.platform.location
-  tenant_id           = data.azurerm_client_config.current.tenant_id
-  tags                = var.tags
+  name                       = "kv-${var.project_name}-${local.suffix}"
+  resource_group_name        = azurerm_resource_group.platform.name
+  location                   = azurerm_resource_group.platform.location
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  private_endpoint_subnet_id = module.networking.private_endpoint_subnet_id
+  virtual_network_id         = module.networking.vnet_id
+  tags                       = var.tags
 }
 
 module "observability" {
@@ -104,6 +107,51 @@ module "aks" {
   ]
 }
 
+module "sql_database" {
+  source = "../../modules/sql-database"
+
+  server_name                = "sql-${var.project_name}-${local.suffix}"
+  resource_group_name        = azurerm_resource_group.platform.name
+  location                   = azurerm_resource_group.platform.location
+  tenant_id                  = data.azurerm_client_config.current.tenant_id
+  entra_admin_login_username = var.platform_admin_group_display_name
+  entra_admin_object_id      = var.platform_admin_group_object_id
+  database_names             = ["pharmacy-dev", "pharmacy-prod"]
+  database_sku_name          = var.sql_database_sku_name
+  database_max_size_gb       = var.sql_database_max_size_gb
+  private_endpoint_subnet_id = module.networking.private_endpoint_subnet_id
+  virtual_network_id         = module.networking.vnet_id
+  tags                       = var.tags
+}
+
+resource "azurerm_user_assigned_identity" "backend" {
+  for_each = toset(["dev", "prod"])
+
+  name                = "id-${var.project_name}-backend-${each.key}"
+  resource_group_name = azurerm_resource_group.platform.name
+  location            = azurerm_resource_group.platform.location
+  tags                = merge(var.tags, { environment = each.key })
+}
+
+resource "azurerm_federated_identity_credential" "backend" {
+  for_each = azurerm_user_assigned_identity.backend
+
+  name      = "fic-${var.project_name}-backend-${each.key}"
+  parent_id = each.value.id
+  issuer    = module.aks.oidc_issuer_url
+  subject   = "system:serviceaccount:${each.key}:pharmacy-backend"
+  audience  = ["api://AzureADTokenExchange"]
+}
+
+resource "azurerm_role_assignment" "backend_key_vault_secrets_user" {
+  for_each = azurerm_user_assigned_identity.backend
+
+  scope                            = module.key_vault.id
+  role_definition_name             = "Key Vault Secrets User"
+  principal_id                     = each.value.principal_id
+  skip_service_principal_aad_check = true
+}
+
 resource "azurerm_role_assignment" "aks_acr_pull" {
   scope                            = module.acr.id
   role_definition_name             = "AcrPull"
@@ -127,13 +175,6 @@ resource "azurerm_role_assignment" "platform_admin_key_vault_admin" {
   scope                = module.key_vault.id
   role_definition_name = "Key Vault Administrator"
   principal_id         = var.platform_admin_group_object_id
-}
-
-resource "azurerm_role_assignment" "aks_key_vault_secrets_user" {
-  scope                            = module.key_vault.id
-  role_definition_name             = "Key Vault Secrets User"
-  principal_id                     = module.aks.key_vault_secrets_provider_object_id
-  skip_service_principal_aad_check = true
 }
 
 resource "azurerm_role_assignment" "platform_admin_adls_data_owner" {

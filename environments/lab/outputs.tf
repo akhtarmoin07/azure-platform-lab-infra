@@ -26,6 +26,23 @@ output "key_vault_uri" {
   value = module.key_vault.vault_uri
 }
 
+output "key_vault_name" {
+  value = module.key_vault.name
+}
+
+output "sql_server_fqdn" {
+  value = module.sql_database.server_fqdn
+}
+
+output "sql_database_names" {
+  value = module.sql_database.database_names
+}
+
+output "backend_workload_identity_client_ids" {
+  description = "Client IDs used by the dev and prod pharmacy-backend Kubernetes ServiceAccounts."
+  value       = { for environment, identity in azurerm_user_assigned_identity.backend : environment => identity.client_id }
+}
+
 output "log_analytics_workspace_id" {
   value = module.observability.id
 }

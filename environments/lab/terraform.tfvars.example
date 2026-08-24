@@ -1,18 +1,23 @@
-subscription_id = "00000000-0000-0000-0000-000000000000"
-platform_admin_group_object_id = "00000000-0000-0000-0000-000000000000"
-location        = "swedencentral"
-project_name    = "azplab"
+subscription_id                   = "00000000-0000-0000-0000-000000000000"
+platform_admin_group_object_id    = "00000000-0000-0000-0000-000000000000"
+platform_admin_group_display_name = "platform-admins"
+location                          = "swedencentral"
+project_name                      = "azplab"
 
-vnet_address_space = ["10.20.0.0/16"]
-aks_subnet_prefixes = ["10.20.0.0/22"]
-aks_service_cidr    = "10.30.0.0/16"
-aks_dns_service_ip  = "10.30.0.10"
-aks_pod_cidr        = "10.40.0.0/16"
+vnet_address_space               = ["10.20.0.0/16"]
+aks_subnet_prefixes              = ["10.20.0.0/22"]
+private_endpoint_subnet_prefixes = ["10.20.4.0/24"]
+aks_service_cidr                 = "10.30.0.0/16"
+aks_dns_service_ip               = "10.30.0.10"
+aks_pod_cidr                     = "10.40.0.0/16"
 
 node_vm_size         = "Standard_B2s_v2"
 node_count           = 1
 node_os_disk_size_gb = 30
 kubernetes_version   = null
+
+sql_database_sku_name    = "Basic"
+sql_database_max_size_gb = 2
 
 acr_sku         = "Basic"
 adls_containers = ["raw", "curated", "models"]
