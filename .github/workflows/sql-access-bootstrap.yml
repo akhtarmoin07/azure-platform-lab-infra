@@ -52,7 +52,25 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          
+      - name: Install kubelogin
+        uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: "v0.2.19"
 
+      - name: Set AKS context
+        uses: azure/aks-set-context@v5
+        with:
+          subscription: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          resource-group: rg-azplab-lab
+          cluster-name: aks-azplab-lab
+          admin: "false"
+          use-kubelogin: "true"
+
+      - name: Verify AKS access
+        run: |
+          kubectl config current-context
+          kubectl get namespace platform-system
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
