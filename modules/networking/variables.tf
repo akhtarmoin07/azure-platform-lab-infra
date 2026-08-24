@@ -21,6 +21,12 @@ variable "aks_subnet_prefixes" {
   default = ["10.20.0.0/22"]
 }
 
+variable "private_endpoint_subnet_prefixes" {
+  description = "Address prefixes reserved for Azure Private Endpoints."
+  type        = list(string)
+  default     = ["10.20.4.0/24"]
+}
+
 variable "tags" {
   type    = map(string)
   default = {}

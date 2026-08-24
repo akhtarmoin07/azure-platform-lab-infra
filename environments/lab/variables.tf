@@ -8,6 +8,17 @@ variable "platform_admin_group_object_id" {
   type        = string
 }
 
+variable "platform_admin_group_display_name" {
+  description = "Display name of the Microsoft Entra platform administrators group used as the Azure SQL administrator."
+  type        = string
+  default     = "platform-admins"
+
+  validation {
+    condition     = trimspace(var.platform_admin_group_display_name) != ""
+    error_message = "The platform administrator group display name must not be empty."
+  }
+}
+
 variable "location" {
   type    = string
   default = "swedencentral"
@@ -26,6 +37,22 @@ variable "vnet_address_space" {
 variable "aks_subnet_prefixes" {
   type    = list(string)
   default = ["10.20.0.0/22"]
+}
+
+variable "private_endpoint_subnet_prefixes" {
+  type    = list(string)
+  default = ["10.20.4.0/24"]
+}
+
+variable "sql_database_sku_name" {
+  description = "Low-cost Azure SQL SKU for both lab databases."
+  type        = string
+  default     = "Basic"
+}
+
+variable "sql_database_max_size_gb" {
+  type    = number
+  default = 2
 }
 
 variable "aks_service_cidr" {
