@@ -2,6 +2,11 @@
 
 Terraform-managed Azure infrastructure for an AKS, ACR and GitOps learning platform.
 
+## Documentation
+
+- [Infrastructure resource catalog](docs/architecture/infrastructure-resource-catalog.md): every Terraform-managed resource, its purpose, relationships, security model and production gaps.
+- [Platform scope](docs/architecture/platform-scope.md): learning goals, non-goals and success criteria.
+
 ## Azure SQL and application identity
 
 The lab creates one private Azure SQL logical server with separate `pharmacy-dev`

@@ -48,4 +48,4 @@ the responsibilities of a Platform Engineer supporting Data and AI teams.
 - Changes pass automated validation before deployment.
 - Platform health can be observed through metrics, logs and alerts.
 - Common failures have documented troubleshooting runbooks.
-- Monthly out-of-pocket Azure spending remains below EUR 50.
+- Monthly out-of-pocket Azure spending remains below EUR 100.
