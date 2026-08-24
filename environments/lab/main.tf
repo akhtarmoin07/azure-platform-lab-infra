@@ -135,6 +135,16 @@ resource "azurerm_user_assigned_identity" "sql_bootstrap" {
   tags                = merge(var.tags, { purpose = "sql-access-bootstrap" })
 }
 
+resource "azurerm_user_assigned_identity" "application_delivery" {
+  name                = "id-${var.project_name}-application-delivery"
+  resource_group_name = azurerm_resource_group.platform.name
+  location            = azurerm_resource_group.platform.location
+
+  tags = merge(var.tags, {
+    purpose = "application-container-delivery"
+  })
+}
+
 module "sql_database" {
   source = "../../modules/sql-database"
 
@@ -198,6 +208,14 @@ resource "azurerm_federated_identity_credential" "sql_bootstrap" {
   audience  = ["api://AzureADTokenExchange"]
 }
 
+resource "azurerm_federated_identity_credential" "application_delivery" {
+  name      = "fic-${var.project_name}-application-delivery"
+  parent_id = azurerm_user_assigned_identity.application_delivery.id
+  issuer    = "https://token.actions.githubusercontent.com"
+  subject   = "repo:akhtarmoin07/azure-platform-lab-apps:environment:lab"
+  audience  = ["api://AzureADTokenExchange"]
+}
+
 resource "azurerm_role_assignment" "backend_key_vault_secrets_user" {
   for_each = azurerm_user_assigned_identity.backend
 
@@ -218,6 +236,13 @@ resource "azurerm_role_assignment" "terraform_automation_acr_push" {
   scope                            = module.acr.id
   role_definition_name             = "AcrPush"
   principal_id                     = data.azurerm_client_config.current.object_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "application_delivery_acr_push" {
+  scope                            = module.acr.id
+  role_definition_name             = "AcrPush"
+  principal_id                     = azurerm_user_assigned_identity.application_delivery.principal_id
   skip_service_principal_aad_check = true
 }
 

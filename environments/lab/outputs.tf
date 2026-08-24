@@ -53,6 +53,11 @@ output "sql_bootstrap_workload_identity_client_id" {
   value       = azurerm_user_assigned_identity.sql_bootstrap.client_id
 }
 
+output "application_delivery_identity_client_id" {
+  description = "Client ID used by the applications repository to publish images to ACR through GitHub OIDC."
+  value       = azurerm_user_assigned_identity.application_delivery.client_id
+}
+
 output "sql_access_groups" {
   description = "Stable Entra group names and object IDs consumed by the SQL access bootstrap. Membership is governed outside Terraform."
   value = {
