@@ -6,6 +6,27 @@ locals {
   resource_group_name = "rg-${var.project_name}-lab"
 }
 
+resource "azuread_group_without_members" "sql_dev_developers" {
+  display_name            = "${var.sql_access_group_prefix}-dev-developers"
+  description             = "Developers with controlled data access to the pharmacy development database."
+  security_enabled        = true
+  prevent_duplicate_names = true
+}
+
+resource "azuread_group_without_members" "sql_prod_readers" {
+  display_name            = "${var.sql_access_group_prefix}-prod-readers"
+  description             = "Engineers with read-only troubleshooting access to the pharmacy production-pattern database."
+  security_enabled        = true
+  prevent_duplicate_names = true
+}
+
+resource "azuread_group_without_members" "sql_prod_admins" {
+  display_name            = "${var.sql_access_group_prefix}-prod-admins"
+  description             = "Exceptional production-pattern database administrators; use PIM/JIT membership in production."
+  security_enabled        = true
+  prevent_duplicate_names = true
+}
+
 resource "azurerm_resource_group" "platform" {
   name     = local.resource_group_name
   location = var.location
@@ -107,6 +128,13 @@ module "aks" {
   ]
 }
 
+resource "azurerm_user_assigned_identity" "sql_bootstrap" {
+  name                = "id-${var.project_name}-sql-bootstrap"
+  resource_group_name = azurerm_resource_group.platform.name
+  location            = azurerm_resource_group.platform.location
+  tags                = merge(var.tags, { purpose = "sql-access-bootstrap" })
+}
+
 module "sql_database" {
   source = "../../modules/sql-database"
 
@@ -114,8 +142,8 @@ module "sql_database" {
   resource_group_name        = azurerm_resource_group.platform.name
   location                   = azurerm_resource_group.platform.location
   tenant_id                  = data.azurerm_client_config.current.tenant_id
-  entra_admin_login_username = var.platform_admin_group_display_name
-  entra_admin_object_id      = var.platform_admin_group_object_id
+  entra_admin_login_username = azurerm_user_assigned_identity.sql_bootstrap.name
+  entra_admin_object_id      = azurerm_user_assigned_identity.sql_bootstrap.principal_id
   database_names             = ["pharmacy-dev", "pharmacy-prod"]
   database_sku_name          = var.sql_database_sku_name
   database_max_size_gb       = var.sql_database_max_size_gb
@@ -133,6 +161,15 @@ resource "azurerm_user_assigned_identity" "backend" {
   tags                = merge(var.tags, { environment = each.key })
 }
 
+resource "azurerm_user_assigned_identity" "migration" {
+  for_each = toset(["dev", "prod"])
+
+  name                = "id-${var.project_name}-migration-${each.key}"
+  resource_group_name = azurerm_resource_group.platform.name
+  location            = azurerm_resource_group.platform.location
+  tags                = merge(var.tags, { environment = each.key, purpose = "database-schema-migration" })
+}
+
 resource "azurerm_federated_identity_credential" "backend" {
   for_each = azurerm_user_assigned_identity.backend
 
@@ -140,6 +177,24 @@ resource "azurerm_federated_identity_credential" "backend" {
   parent_id = each.value.id
   issuer    = module.aks.oidc_issuer_url
   subject   = "system:serviceaccount:${each.key}:pharmacy-backend"
+  audience  = ["api://AzureADTokenExchange"]
+}
+
+resource "azurerm_federated_identity_credential" "migration" {
+  for_each = azurerm_user_assigned_identity.migration
+
+  name      = "fic-${var.project_name}-migration-${each.key}"
+  parent_id = each.value.id
+  issuer    = module.aks.oidc_issuer_url
+  subject   = "system:serviceaccount:${each.key}:pharmacy-migration"
+  audience  = ["api://AzureADTokenExchange"]
+}
+
+resource "azurerm_federated_identity_credential" "sql_bootstrap" {
+  name      = "fic-${var.project_name}-sql-bootstrap"
+  parent_id = azurerm_user_assigned_identity.sql_bootstrap.id
+  issuer    = module.aks.oidc_issuer_url
+  subject   = "system:serviceaccount:platform-system:sql-access-bootstrap"
   audience  = ["api://AzureADTokenExchange"]
 }
 
@@ -157,6 +212,25 @@ resource "azurerm_role_assignment" "aks_acr_pull" {
   role_definition_name             = "AcrPull"
   principal_id                     = module.aks.kubelet_identity_object_id
   skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "terraform_automation_acr_push" {
+  scope                            = module.acr.id
+  role_definition_name             = "AcrPush"
+  principal_id                     = data.azurerm_client_config.current.object_id
+  skip_service_principal_aad_check = true
+}
+
+resource "azurerm_role_assignment" "terraform_automation_aks_cluster_user" {
+  scope                = module.aks.id
+  role_definition_name = "Azure Kubernetes Service Cluster User Role"
+  principal_id         = data.azurerm_client_config.current.object_id
+}
+
+resource "azurerm_role_assignment" "terraform_automation_aks_rbac_admin" {
+  scope                = module.aks.id
+  role_definition_name = "Azure Kubernetes Service RBAC Cluster Admin"
+  principal_id         = data.azurerm_client_config.current.object_id
 }
 
 resource "azurerm_role_assignment" "platform_admin_aks_admin" {

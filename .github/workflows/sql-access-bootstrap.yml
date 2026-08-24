@@ -1,0 +1,149 @@
+name: Bootstrap Azure SQL access
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "bootstrap" to reconcile Azure SQL principals and roles'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: sql-access-bootstrap-lab
+  cancel-in-progress: false
+
+env:
+  TF_IN_AUTOMATION: "true"
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_subscription_id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  TF_VAR_platform_admin_group_object_id: ${{ vars.PLATFORM_ADMIN_GROUP_OBJECT_ID }}
+  TF_VAR_platform_admin_group_display_name: ${{ vars.PLATFORM_ADMIN_GROUP_DISPLAY_NAME }}
+  TF_VAR_location: ${{ vars.AZURE_LOCATION }}
+  TF_VAR_budget_contact_emails: ${{ vars.BUDGET_CONTACT_EMAILS }}
+
+jobs:
+  reconcile:
+    name: Reconcile database access
+    runs-on: ubuntu-latest
+    environment: lab
+
+    steps:
+      - name: Confirm privileged operation
+        shell: bash
+        run: |
+          if [[ "${{ inputs.confirmation }}" != "bootstrap" ]]; then
+            echo 'Confirmation must be exactly "bootstrap".'
+            exit 1
+          fi
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Log in to Azure with OIDC
+        uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.9
+          terraform_wrapper: false
+
+      - name: Set up kubelogin
+        uses: azure/use-kubelogin@v1
+
+      - name: Read deployed infrastructure contract
+        id: infrastructure
+        working-directory: environments/lab
+        shell: bash
+        run: |
+          terraform init -reconfigure -input=false
+          outputs="$(terraform output -json)"
+          echo "resource_group=$(jq -r '.resource_group_name.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "aks_name=$(jq -r '.aks_name.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "acr_login_server=$(jq -r '.acr_login_server.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "sql_server=$(jq -r '.sql_server_fqdn.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "bootstrap_client_id=$(jq -r '.sql_bootstrap_workload_identity_client_id.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "dev_backend_client_id=$(jq -r '.backend_workload_identity_client_ids.value.dev' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "prod_backend_client_id=$(jq -r '.backend_workload_identity_client_ids.value.prod' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "dev_migration_client_id=$(jq -r '.migration_workload_identity_client_ids.value.dev' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "prod_migration_client_id=$(jq -r '.migration_workload_identity_client_ids.value.prod' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "dev_group_name=$(jq -r '.sql_access_groups.value.dev_developers.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "dev_group_id=$(jq -r '.sql_access_groups.value.dev_developers.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "prod_reader_name=$(jq -r '.sql_access_groups.value.prod_readers.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "prod_reader_id=$(jq -r '.sql_access_groups.value.prod_readers.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "prod_admin_name=$(jq -r '.sql_access_groups.value.prod_admins.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "prod_admin_id=$(jq -r '.sql_access_groups.value.prod_admins.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "platform_admin_name=$(jq -r '.sql_access_groups.value.platform_admins.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+          echo "platform_admin_id=$(jq -r '.sql_access_groups.value.platform_admins.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push immutable bootstrap image
+        shell: bash
+        env:
+          ACR_LOGIN_SERVER: ${{ steps.infrastructure.outputs.acr_login_server }}
+        run: |
+          acr_name="${ACR_LOGIN_SERVER%%.*}"
+          az acr login --name "$acr_name"
+          image="$ACR_LOGIN_SERVER/platform/sql-access-bootstrap:${GITHUB_SHA}"
+          docker build --tag "$image" bootstrap/sql-access
+          docker push "$image"
+          echo "BOOTSTRAP_IMAGE=$image" >> "$GITHUB_ENV"
+
+      - name: Connect to AKS through Entra authentication
+        shell: bash
+        run: |
+          az aks get-credentials \
+            --resource-group "${{ steps.infrastructure.outputs.resource_group }}" \
+            --name "${{ steps.infrastructure.outputs.aks_name }}" \
+            --overwrite-existing
+          kubelogin convert-kubeconfig --login azurecli
+          kubectl auth can-i create jobs.batch --namespace platform-system | grep -x yes
+
+      - name: Run in-cluster access reconciliation
+        shell: bash
+        env:
+          SQL_BOOTSTRAP_CLIENT_ID: ${{ steps.infrastructure.outputs.bootstrap_client_id }}
+          SQL_SERVER: ${{ steps.infrastructure.outputs.sql_server }}
+          PLATFORM_ADMIN_GROUP_NAME: ${{ steps.infrastructure.outputs.platform_admin_name }}
+          PLATFORM_ADMIN_GROUP_ID: ${{ steps.infrastructure.outputs.platform_admin_id }}
+          DEV_DEVELOPER_GROUP_NAME: ${{ steps.infrastructure.outputs.dev_group_name }}
+          DEV_DEVELOPER_GROUP_ID: ${{ steps.infrastructure.outputs.dev_group_id }}
+          PROD_READER_GROUP_NAME: ${{ steps.infrastructure.outputs.prod_reader_name }}
+          PROD_READER_GROUP_ID: ${{ steps.infrastructure.outputs.prod_reader_id }}
+          PROD_ADMIN_GROUP_NAME: ${{ steps.infrastructure.outputs.prod_admin_name }}
+          PROD_ADMIN_GROUP_ID: ${{ steps.infrastructure.outputs.prod_admin_id }}
+          DEV_BACKEND_CLIENT_ID: ${{ steps.infrastructure.outputs.dev_backend_client_id }}
+          PROD_BACKEND_CLIENT_ID: ${{ steps.infrastructure.outputs.prod_backend_client_id }}
+          DEV_MIGRATION_CLIENT_ID: ${{ steps.infrastructure.outputs.dev_migration_client_id }}
+          PROD_MIGRATION_CLIENT_ID: ${{ steps.infrastructure.outputs.prod_migration_client_id }}
+        run: |
+          kubectl get namespace platform-system
+          kubectl delete job sql-access-bootstrap --namespace platform-system --ignore-not-found=true
+          envsubst < bootstrap/sql-access/job.yaml.tpl > "$RUNNER_TEMP/sql-access-job.yaml"
+          kubectl apply --filename "$RUNNER_TEMP/sql-access-job.yaml"
+          if ! kubectl wait \
+            --for=condition=complete \
+            --timeout=5m \
+            job/sql-access-bootstrap \
+            --namespace platform-system; then
+            kubectl logs job/sql-access-bootstrap --namespace platform-system --all-containers=true
+            exit 1
+          fi
+          kubectl logs job/sql-access-bootstrap --namespace platform-system --all-containers=true
+
+      - name: Remove privileged bootstrap objects
+        if: always()
+        shell: bash
+        run: |
+          kubectl delete job sql-access-bootstrap --namespace platform-system --ignore-not-found=true
+          kubectl delete serviceaccount sql-access-bootstrap --namespace platform-system --ignore-not-found=true

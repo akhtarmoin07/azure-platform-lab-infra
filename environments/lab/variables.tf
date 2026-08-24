@@ -19,6 +19,12 @@ variable "platform_admin_group_display_name" {
   }
 }
 
+variable "sql_access_group_prefix" {
+  description = "Prefix used for Microsoft Entra groups that grant human Azure SQL access. Group membership is managed by Entra governance, not Terraform."
+  type        = string
+  default     = "azplab-sql"
+}
+
 variable "location" {
   type    = string
   default = "swedencentral"
