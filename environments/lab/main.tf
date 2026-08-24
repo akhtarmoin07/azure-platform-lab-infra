@@ -209,11 +209,11 @@ resource "azurerm_federated_identity_credential" "sql_bootstrap" {
 }
 
 resource "azurerm_federated_identity_credential" "application_delivery" {
-  name      = "fic-${var.project_name}-application-delivery"
-  parent_id = azurerm_user_assigned_identity.application_delivery.id
-  issuer    = "https://token.actions.githubusercontent.com"
-  subject   = "repo:akhtarmoin07/azure-platform-lab-apps:environment:lab"
-  audience  = ["api://AzureADTokenExchange"]
+  name                      = "fic-${var.project_name}-application-delivery"
+  user_assigned_identity_id = azurerm_user_assigned_identity.application_delivery.id
+  issuer                    = "https://token.actions.githubusercontent.com"
+  subject                   = "repo:akhtarmoin07@62751495/azure-platform-lab-apps@1343618508:environment:lab"
+  audience                  = ["api://AzureADTokenExchange"]
 }
 
 resource "azurerm_role_assignment" "backend_key_vault_secrets_user" {
