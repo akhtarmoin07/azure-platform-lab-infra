@@ -52,33 +52,17 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          
-      - name: Install kubelogin
-        uses: azure/use-kubelogin@v1
-        with:
-          kubelogin-version: "v0.2.19"
 
-      - name: Set AKS context
-        uses: azure/aks-set-context@v5
-        with:
-          subscription: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-          resource-group: rg-azplab-lab
-          cluster-name: aks-azplab-lab
-          admin: "false"
-          use-kubelogin: "true"
-
-      - name: Verify AKS access
-        run: |
-          kubectl config current-context
-          kubectl get namespace platform-system
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.15.9
           terraform_wrapper: false
 
-      - name: Set up kubelogin
+      - name: Install kubelogin
         uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: "v0.2.19"
 
       - name: Read deployed infrastructure contract
         id: infrastructure
@@ -87,21 +71,29 @@ jobs:
         run: |
           terraform init -reconfigure -input=false
           outputs="$(terraform output -json)"
+
           echo "resource_group=$(jq -r '.resource_group_name.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "aks_name=$(jq -r '.aks_name.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "acr_login_server=$(jq -r '.acr_login_server.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "sql_server=$(jq -r '.sql_server_fqdn.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "bootstrap_client_id=$(jq -r '.sql_bootstrap_workload_identity_client_id.value' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "dev_backend_client_id=$(jq -r '.backend_workload_identity_client_ids.value.dev' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "prod_backend_client_id=$(jq -r '.backend_workload_identity_client_ids.value.prod' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "dev_migration_client_id=$(jq -r '.migration_workload_identity_client_ids.value.dev' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "prod_migration_client_id=$(jq -r '.migration_workload_identity_client_ids.value.prod' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "dev_group_name=$(jq -r '.sql_access_groups.value.dev_developers.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "dev_group_id=$(jq -r '.sql_access_groups.value.dev_developers.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "prod_reader_name=$(jq -r '.sql_access_groups.value.prod_readers.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "prod_reader_id=$(jq -r '.sql_access_groups.value.prod_readers.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "prod_admin_name=$(jq -r '.sql_access_groups.value.prod_admins.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "prod_admin_id=$(jq -r '.sql_access_groups.value.prod_admins.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
+
           echo "platform_admin_name=$(jq -r '.sql_access_groups.value.platform_admins.display_name' <<<"$outputs")" >> "$GITHUB_OUTPUT"
           echo "platform_admin_id=$(jq -r '.sql_access_groups.value.platform_admins.object_id' <<<"$outputs")" >> "$GITHUB_OUTPUT"
 
@@ -112,56 +104,102 @@ jobs:
         run: |
           acr_name="${ACR_LOGIN_SERVER%%.*}"
           az acr login --name "$acr_name"
+
           image="$ACR_LOGIN_SERVER/platform/sql-access-bootstrap:${GITHUB_SHA}"
           docker build --tag "$image" bootstrap/sql-access
           docker push "$image"
+
           echo "BOOTSTRAP_IMAGE=$image" >> "$GITHUB_ENV"
 
-      - name: Connect to AKS through Entra authentication
+      - name: Set AKS context
+        id: aks_context
+        uses: azure/aks-set-context@v5
+        with:
+          subscription: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          resource-group: ${{ steps.infrastructure.outputs.resource_group }}
+          cluster-name: ${{ steps.infrastructure.outputs.aks_name }}
+          admin: "false"
+          use-kubelogin: "true"
+
+      - name: Verify AKS access
         shell: bash
         run: |
-          az aks get-credentials \
-            --resource-group "${{ steps.infrastructure.outputs.resource_group }}" \
-            --name "${{ steps.infrastructure.outputs.aks_name }}" \
-            --overwrite-existing
-          kubelogin convert-kubeconfig --login azurecli
-          kubectl auth can-i create jobs.batch --namespace platform-system | grep -x yes
+          kubectl config current-context
+          kubectl get namespace platform-system
+          kubectl auth can-i create jobs.batch \
+            --namespace platform-system |
+            grep -x yes
 
       - name: Run in-cluster access reconciliation
         shell: bash
         env:
           SQL_BOOTSTRAP_CLIENT_ID: ${{ steps.infrastructure.outputs.bootstrap_client_id }}
           SQL_SERVER: ${{ steps.infrastructure.outputs.sql_server }}
+
           PLATFORM_ADMIN_GROUP_NAME: ${{ steps.infrastructure.outputs.platform_admin_name }}
           PLATFORM_ADMIN_GROUP_ID: ${{ steps.infrastructure.outputs.platform_admin_id }}
+
           DEV_DEVELOPER_GROUP_NAME: ${{ steps.infrastructure.outputs.dev_group_name }}
           DEV_DEVELOPER_GROUP_ID: ${{ steps.infrastructure.outputs.dev_group_id }}
+
           PROD_READER_GROUP_NAME: ${{ steps.infrastructure.outputs.prod_reader_name }}
           PROD_READER_GROUP_ID: ${{ steps.infrastructure.outputs.prod_reader_id }}
+
           PROD_ADMIN_GROUP_NAME: ${{ steps.infrastructure.outputs.prod_admin_name }}
           PROD_ADMIN_GROUP_ID: ${{ steps.infrastructure.outputs.prod_admin_id }}
+
           DEV_BACKEND_CLIENT_ID: ${{ steps.infrastructure.outputs.dev_backend_client_id }}
           PROD_BACKEND_CLIENT_ID: ${{ steps.infrastructure.outputs.prod_backend_client_id }}
+
           DEV_MIGRATION_CLIENT_ID: ${{ steps.infrastructure.outputs.dev_migration_client_id }}
           PROD_MIGRATION_CLIENT_ID: ${{ steps.infrastructure.outputs.prod_migration_client_id }}
         run: |
           kubectl get namespace platform-system
-          kubectl delete job sql-access-bootstrap --namespace platform-system --ignore-not-found=true
-          envsubst < bootstrap/sql-access/job.yaml.tpl > "$RUNNER_TEMP/sql-access-job.yaml"
-          kubectl apply --filename "$RUNNER_TEMP/sql-access-job.yaml"
+
+          kubectl delete job sql-access-bootstrap \
+            --namespace platform-system \
+            --ignore-not-found=true
+
+          envsubst \
+            < bootstrap/sql-access/job.yaml.tpl \
+            > "$RUNNER_TEMP/sql-access-job.yaml"
+
+          kubectl apply \
+            --filename "$RUNNER_TEMP/sql-access-job.yaml"
+
           if ! kubectl wait \
             --for=condition=complete \
             --timeout=5m \
             job/sql-access-bootstrap \
             --namespace platform-system; then
-            kubectl logs job/sql-access-bootstrap --namespace platform-system --all-containers=true
+
+            kubectl describe job sql-access-bootstrap \
+              --namespace platform-system
+
+            kubectl get pods \
+              --namespace platform-system \
+              --selector=job-name=sql-access-bootstrap \
+              --output=wide
+
+            kubectl logs job/sql-access-bootstrap \
+              --namespace platform-system \
+              --all-containers=true
+
             exit 1
           fi
-          kubectl logs job/sql-access-bootstrap --namespace platform-system --all-containers=true
+
+          kubectl logs job/sql-access-bootstrap \
+            --namespace platform-system \
+            --all-containers=true
 
       - name: Remove privileged bootstrap objects
-        if: always()
+        if: ${{ always() && steps.aks_context.outcome == 'success' }}
         shell: bash
         run: |
-          kubectl delete job sql-access-bootstrap --namespace platform-system --ignore-not-found=true
-          kubectl delete serviceaccount sql-access-bootstrap --namespace platform-system --ignore-not-found=true
+          kubectl delete job sql-access-bootstrap \
+            --namespace platform-system \
+            --ignore-not-found=true
+
+          kubectl delete serviceaccount sql-access-bootstrap \
+            --namespace platform-system \
+            --ignore-not-found=true
