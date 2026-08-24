@@ -153,9 +153,9 @@ GRANT SELECT ON SCHEMA::dbo TO [application_reader];
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [application_runtime];
 GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO [application_developer];
 GRANT CREATE TABLE, CREATE VIEW, CREATE PROCEDURE, CREATE FUNCTION TO [schema_migrator];
-GRANT SELECT, INSERT, UPDATE, DELETE, EXECUTE, ALTER, CONTROL, REFERENCES ON SCHEMA::dbo TO [schema_migrator];
-GRANT CONTROL DATABASE TO [database_administrator];
-GRANT CONTROL DATABASE TO [platform_administrator];
+GRANT CONTROL ON SCHEMA::dbo TO [schema_migrator];
+GRANT CONTROL TO [database_administrator];
+GRANT CONTROL TO [platform_administrator];
 `
 
 const principalDDL = `
