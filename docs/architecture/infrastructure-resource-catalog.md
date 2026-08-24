@@ -28,6 +28,8 @@ flowchart LR
     ProdDB[pharmacy-prod]
     DevID[Dev backend identity]
     ProdID[Prod backend identity]
+    MigrationID[Dev/prod migration identities]
+    BootstrapID[SQL bootstrap identity]
 
     VNet --> AKSSubnet --> AKS
     VNet --> PESubnet
@@ -39,6 +41,9 @@ flowchart LR
     AKS -. optional telemetry .-> LAW
     DevID -->|federated with dev ServiceAccount| AKS
     ProdID -->|federated with prod ServiceAccount| AKS
+    MigrationID -->|federated with migration ServiceAccounts| AKS
+    BootstrapID -->|temporary platform-system Job| AKS
+    BootstrapID -->|Entra administrator| SQL
     DevID -->|read permitted secrets| KV
     ProdID -->|read permitted secrets| KV
   end
@@ -70,6 +75,8 @@ Files: `environments/lab/providers.tf` and `environments/lab/versions.tf`
 
 - Terraform is constrained to `>= 1.13.0, < 2.0.0`.
 - AzureRM is constrained to `~> 4.0`, allowing compatible 4.x updates.
+- AzureAD is constrained to `~> 3.0` and manages stable group objects without
+  managing their human membership.
 - The provider targets the explicitly supplied subscription.
 - Soft-deleted Key Vaults can be recovered, while a deliberate lab destroy also
   purges the vault so its globally unique name can be reused.
@@ -133,6 +140,23 @@ The older vault-wide permission for the AKS Secrets Store add-on identity is
 removed. The CSI driver runs in the cluster, but authorization belongs to the
 individual workload identity rather than a shared cluster identity.
 
+### SQL access and migration identities
+
+`azurerm_user_assigned_identity.migration` creates separate dev and prod schema
+migration identities federated only to the `pharmacy-migration` ServiceAccount
+in the matching namespace. Runtime backend identities therefore do not require
+DDL permission.
+
+`azurerm_user_assigned_identity.sql_bootstrap` is the Azure SQL Entra
+administrator. Its federated credential trusts only
+`system:serviceaccount:platform-system:sql-access-bootstrap`. The protected
+workflow creates that ServiceAccount and Job temporarily, records the result and
+then removes both objects.
+
+Three `azuread_group_without_members` resources create stable security groups for
+dev developers, prod readers and exceptional prod administrators. Membership is
+intentionally managed through Entra governance rather than Terraform state.
+
 ### Platform administrator roles
 
 | Terraform address | Role and scope | Why it is needed |
@@ -142,15 +166,21 @@ individual workload identity rather than a shared cluster identity.
 | `azurerm_role_assignment.platform_admin_key_vault_admin` | `Key Vault Administrator` on the vault | Allows the platform group to manage Key Vault data-plane objects and permissions. Network restrictions still apply. |
 | `azurerm_role_assignment.platform_admin_adls_data_owner` | `Storage Blob Data Owner` on ADLS | Allows the platform group to manage containers and data for lab exercises. |
 
-Azure SQL separately configures this same Entra group as the logical server's
-Entra administrator. Azure RBAC and SQL database permissions are different
-authorization planes.
+The SQL bootstrap creates the platform group as a contained database principal
+with database-control permission in both current databases. The dedicated
+automation identity remains the logical server's Entra administrator. Azure RBAC
+and SQL database permissions are different authorization planes.
 
 ### ACR pull permission
 
 `azurerm_role_assignment.aks_acr_pull` grants the AKS kubelet identity `AcrPull`
 on this registry only. Nodes can pull application images without registry admin
 credentials, but cannot push or delete images.
+
+The protected Terraform OIDC identity additionally receives `AcrPush`, AKS
+Cluster User and AKS RBAC Cluster Admin at the narrow registry/cluster scopes.
+These permissions allow the reviewed SQL bootstrap workflow to publish its image
+and run the temporary in-cluster Job; they are not granted to application CI.
 
 ### Subscription budget
 
@@ -276,9 +306,10 @@ local backup storage redundancy and seven-day point-in-time backup retention. Th
 is suitable for a short-lived lab, not for a critical pharmacy production system.
 
 Azure SQL database authorization is not granted through an Azure role assignment.
-After provisioning, a controlled SQL bootstrap must create contained database
-users mapped to the dev and prod identities, then grant only runtime permissions.
-Schema migration permissions should belong to a separate pipeline identity.
+The protected bootstrap workflow creates contained users directly from Entra
+group object IDs and managed-identity client IDs and reconciles custom reader,
+runtime, developer, migrator and administrator roles. Explicit SID binding avoids
+SQL passwords and avoids granting Directory Readers to the SQL server identity.
 
 ### Observability module
 
@@ -300,8 +331,8 @@ they can contain environment-specific or sensitive values.
 
 `environments/lab/outputs.tf` exposes identifiers required by operators and later
 GitOps configuration, including the AKS name, ACR hostname, ADLS endpoints, Key
-Vault name/URI, SQL FQDN and dev/prod managed-identity client IDs. Outputs are not
-credentials.
+Vault name/URI, SQL FQDN, access group IDs, and backend/migration/bootstrap
+managed-identity client IDs. Outputs are not credentials.
 
 ## State migration declarations
 
@@ -336,8 +367,9 @@ ready because:
 - ACR and ADLS still expose public network endpoints.
 - Container Insights and complete alerting are not enabled.
 - Azure SQL has no geo-replica, zone redundancy or failover group.
-- SQL users, least-privilege grants and schema migrations still need the controlled
-  bootstrap pipeline.
+- SQL access reconciliation is automated, but environment promotion of immutable
+  application images and schema migrations still requires the delivery/GitOps
+  workflow.
 - Backups exist, but restoration has not yet been tested.
 - GitHub environment reviewer protection and branch protection must be verified.
 
