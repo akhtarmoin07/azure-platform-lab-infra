@@ -36,7 +36,7 @@ variable "node_vm_size" {
 variable "node_count" {
   description = "Number of nodes in the AKS system node pool."
   type        = number
-  default     = 1
+  default     = 2
 
   validation {
     condition     = var.node_count >= 1

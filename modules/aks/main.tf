@@ -24,6 +24,8 @@ resource "azurerm_kubernetes_cluster" "this" {
     only_critical_addons_enabled = false
 
     upgrade_settings {
+      # AzureRM 4.x requires max_surge and does not expose max_unavailable.
+      # The environment-level AzAPI patch owns the effective upgrade settings.
       max_surge = "10%"
     }
   }
@@ -66,6 +68,10 @@ resource "azurerm_kubernetes_cluster" "this" {
   tags = var.tags
 
   lifecycle {
+    # Prevent AzureRM from reverting the quota-safe maxSurge/maxUnavailable
+    # values managed through the agent-pool AzAPI resource.
+    ignore_changes = [default_node_pool[0].upgrade_settings]
+
     precondition {
       condition     = !var.enable_container_insights || var.log_analytics_workspace_id != null
       error_message = "A Log Analytics workspace ID is required when Container Insights is enabled."
