@@ -82,8 +82,20 @@ variable "node_vm_size" {
 }
 
 variable "node_count" {
-  type    = number
-  default = 1
+  description = "Number of AKS worker nodes. Two B2s_v2 nodes consume the lab subscription's four-vCPU regional quota."
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.node_count >= 1 && var.node_count <= 2
+    error_message = "node_count must be one or two because this subscription has a four-vCPU regional quota."
+  }
+}
+
+variable "node_upgrade_max_unavailable" {
+  description = "Existing workers AKS may drain concurrently during upgrades; avoids surge nodes beyond the four-vCPU quota."
+  type        = string
+  default     = "1"
 }
 
 variable "node_os_disk_size_gb" {
@@ -120,6 +132,18 @@ variable "enable_container_insights" {
 variable "enable_azure_policy" {
   type    = bool
   default = false
+}
+
+variable "enable_gateway_api" {
+  description = "Installs the AKS-managed standard-channel Kubernetes Gateway API CRDs."
+  type        = bool
+  default     = true
+}
+
+variable "enable_app_routing_istio" {
+  description = "Enables the AKS-managed sidecarless Istio Gateway API implementation and approuting-istio GatewayClass."
+  type        = bool
+  default     = true
 }
 
 variable "monthly_budget_amount" {

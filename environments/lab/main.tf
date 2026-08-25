@@ -128,6 +128,56 @@ module "aks" {
   ]
 }
 
+# AzureRM does not yet expose the AKS managed Gateway API installation and the
+# Application Routing Istio implementation. AzAPI patches only these new
+# ingress-profile properties while the existing AzureRM module retains
+# ownership of the cluster and its node pool.
+resource "azapi_update_resource" "aks_gateway_api" {
+  type        = "Microsoft.ContainerService/managedClusters@2026-02-01"
+  resource_id = module.aks.id
+
+  body = {
+    properties = {
+      ingressProfile = {
+        gatewayAPI = {
+          installation = var.enable_gateway_api ? "Standard" : "Disabled"
+        }
+        webAppRouting = {
+          gatewayAPIImplementations = {
+            appRoutingIstio = {
+              mode = var.enable_app_routing_istio ? "Enabled" : "Disabled"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    precondition {
+      condition     = !var.enable_app_routing_istio || var.enable_gateway_api
+      error_message = "Application Routing Istio requires the AKS managed Gateway API installation."
+    }
+  }
+}
+
+# AzureRM 4.x requires max_surge but does not yet expose max_unavailable. Patch
+# the existing system agent pool through the current ARM API so upgrades drain
+# one worker instead of allocating a third two-vCPU surge VM.
+resource "azapi_update_resource" "aks_system_pool_upgrade" {
+  type        = "Microsoft.ContainerService/managedClusters/agentPools@2026-02-01"
+  resource_id = "${module.aks.id}/agentPools/system"
+
+  body = {
+    properties = {
+      upgradeSettings = {
+        maxSurge       = "0"
+        maxUnavailable = var.node_upgrade_max_unavailable
+      }
+    }
+  }
+}
+
 resource "azurerm_user_assigned_identity" "sql_bootstrap" {
   name                = "id-${var.project_name}-sql-bootstrap"
   resource_group_name = azurerm_resource_group.platform.name

@@ -11,10 +11,11 @@ aks_service_cidr                 = "10.30.0.0/16"
 aks_dns_service_ip               = "10.30.0.10"
 aks_pod_cidr                     = "10.40.0.0/16"
 
-node_vm_size         = "Standard_B2s_v2"
-node_count           = 1
-node_os_disk_size_gb = 30
-kubernetes_version   = null
+node_vm_size                    = "Standard_B2s_v2"
+node_count                      = 2
+node_upgrade_max_unavailable    = "1"
+node_os_disk_size_gb            = 30
+kubernetes_version              = null
 
 sql_database_sku_name    = "Basic"
 sql_database_max_size_gb = 2
@@ -25,6 +26,8 @@ adls_containers = ["raw", "curated", "models"]
 log_retention_in_days     = 30
 enable_container_insights = false
 enable_azure_policy       = false
+enable_gateway_api        = true
+enable_app_routing_istio  = true
 
 monthly_budget_amount = 100
 budget_start_date      = "2026-08-01T00:00:00Z"

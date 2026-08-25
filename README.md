@@ -2,6 +2,32 @@
 
 Terraform-managed Azure infrastructure for an AKS, ACR and GitOps learning platform.
 
+## AKS capacity and upgrades
+
+The lab runs two `Standard_B2s_v2` worker instances in the AKS system node
+pool. Together they consume four regional vCPUs, which is the subscription's
+current quota. The AKS Free tier removes the cluster-management charge, but the
+worker VMs, disks and networking remain billable.
+
+Node-pool upgrades use ARM settings `maxSurge = "0"` and
+`maxUnavailable = "1"`. AKS therefore drains and upgrades one existing worker
+at a time without requesting a third two-vCPU VM. AzureRM 4.x does not expose
+`maxUnavailable`, so a narrowly scoped AzAPI resource owns the effective system
+pool upgrade settings and AzureRM ignores only that nested field. This provides
+scheduling capacity for the application and Gateway API lab components, but
+deliberately leaves no spare regional vCPU quota. Any VM-size, node-count or
+upgrade-strategy change requires a quota and cost review first.
+
+## Managed Gateway API
+
+Terraform installs the AKS-managed standard-channel Gateway API CRDs and
+enables the sidecarless Application Routing Istio implementation. The new AKS
+ingress-profile fields are managed with the AzAPI provider until the pinned
+AzureRM provider exposes equivalent arguments. This creates the
+`approuting-istio` GatewayClass and managed Istio control plane; Kubernetes
+`Gateway` and `HTTPRoute` resources remain GitOps-managed in their respective
+repositories.
+
 ## Documentation
 
 - [Infrastructure resource catalog](docs/architecture/infrastructure-resource-catalog.md): every Terraform-managed resource, its purpose, relationships, security model and production gaps.
