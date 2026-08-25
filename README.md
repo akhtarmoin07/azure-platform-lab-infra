@@ -9,14 +9,14 @@ pool. Together they consume four regional vCPUs, which is the subscription's
 current quota. The AKS Free tier removes the cluster-management charge, but the
 worker VMs, disks and networking remain billable.
 
-Node-pool upgrades use ARM settings `maxSurge = "0"` and
-`maxUnavailable = "1"`. AKS therefore drains and upgrades one existing worker
-at a time without requesting a third two-vCPU VM. AzureRM 4.x does not expose
-`maxUnavailable`, so a narrowly scoped AzAPI resource owns the effective system
-pool upgrade settings and AzureRM ignores only that nested field. This provides
-scheduling capacity for the application and Gateway API lab components, but
-deliberately leaves no spare regional vCPU quota. Any VM-size, node-count or
-upgrade-strategy change requires a quota and cost review first.
+AKS system pools do not permit `maxUnavailable` greater than zero. Node-pool
+upgrades therefore use `max_surge = "1"`, which temporarily requires one extra
+`Standard_B2s_v2` worker. The normal two-node configuration consumes all four
+currently available regional vCPUs, so an upgrade requires a quota increase to
+at least six vCPUs. Until that quota is available, do not initiate a Kubernetes
+or node-image upgrade while the pool contains two nodes. This is an explicit
+free-subscription constraint rather than a production-ready availability
+characteristic.
 
 ## Managed Gateway API
 

@@ -92,12 +92,6 @@ variable "node_count" {
   }
 }
 
-variable "node_upgrade_max_unavailable" {
-  description = "Existing workers AKS may drain concurrently during upgrades; avoids surge nodes beyond the four-vCPU quota."
-  type        = string
-  default     = "1"
-}
-
 variable "node_os_disk_size_gb" {
   type    = number
   default = 30

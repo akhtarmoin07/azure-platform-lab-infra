@@ -161,23 +161,6 @@ resource "azapi_update_resource" "aks_gateway_api" {
   }
 }
 
-# AzureRM 4.x requires max_surge but does not yet expose max_unavailable. Patch
-# the existing system agent pool through the current ARM API so upgrades drain
-# one worker instead of allocating a third two-vCPU surge VM.
-resource "azapi_update_resource" "aks_system_pool_upgrade" {
-  type        = "Microsoft.ContainerService/managedClusters/agentPools@2026-02-01"
-  resource_id = "${module.aks.id}/agentPools/system"
-
-  body = {
-    properties = {
-      upgradeSettings = {
-        maxSurge       = "0"
-        maxUnavailable = var.node_upgrade_max_unavailable
-      }
-    }
-  }
-}
-
 resource "azurerm_user_assigned_identity" "sql_bootstrap" {
   name                = "id-${var.project_name}-sql-bootstrap"
   resource_group_name = azurerm_resource_group.platform.name
